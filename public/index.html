@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8" />
+  <title>Real-Time Notepad with File Upload</title>
+  <style>
+    /* Reset & base */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0; padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+      color: #222;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    /* Container */
+    .container {
+      display: flex;
+      gap: 20px;
+      width: 90%;
+      max-width: 1000px;
+      flex-grow: 1;
+      background: #fff;
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      min-height: 400px;
+    }
+
+    /* Editor panel */
+    .editor-panel {
+      flex: 2;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+    }
+    textarea#editor {
+      flex-grow: 1;
+      width: 100%;
+      font-size: 1.1rem;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      resize: vertical;
+      font-family: monospace;
+      background: #fcfcfc;
+      transition: border-color 0.3s;
+    }
+    textarea#editor:focus {
+      border-color: #0066ff;
+      outline: none;
+      background: #fff;
+    }
+
+    /* Files panel */
+    .files-panel {
+      flex: 1;
+      border-left: 1px solid #eee;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      background: #fafafa;
+    }
+    .files-panel h2 {
+      margin-top: 0;
+      font-weight: 600;
+      font-size: 1.2rem;
+      color: #444;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 8px;
+    }
+    .file-list {
+      flex-grow: 1;
+      margin-top: 10px;
+      overflow-y: auto;
+    }
+    .file-list div {
+      margin-bottom: 12px;
+    }
+    .file-list a {
+      color: #0066ff;
+      text-decoration: none;
+      font-weight: 500;
+      display: inline-block;
+      word-break: break-all;
+      transition: color 0.2s;
+    }
+    .file-list a:hover {
+      color: #004bb5;
+      text-decoration: underline;
+    }
+
+    /* Upload input and drag & drop */
+    .upload-area {
+      margin-top: 15px;
+      border: 2px dashed #aaa;
+      border-radius: 6px;
+      padding: 15px;
+      text-align: center;
+      color: #777;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.3s, border-color 0.3s;
+    }
+    .upload-area.dragover {
+      background-color: #e0f0ff;
+      border-color: #3399ff;
+      color: #3399ff;
+    }
+    .upload-area input[type="file"] {
+      display: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      .container {
+        flex-direction: column;
+      }
+      .files-panel {
+        border-left: none;
+        border-top: 1px solid #eee;
+        margin-top: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>📝 Real-Time Shared Notepad</h1>
+  <div class="container">
+    <section class="editor-panel">
+      <textarea id="editor" placeholder="Start typing..."></textarea>
+      <label class="upload-area" for="fileInput">
+        📂 Click or drag & drop a file to upload
+        <input type="file" id="fileInput" />
+      </label>
+    </section>
+    <section class="files-panel">
+      <h2>Uploaded Files</h2>
+      <div class="file-list" id="files"></div>
+    </section>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const socket = io();
+      const editor = document.getElementById("editor");
+      const fileInput = document.getElementById("fileInput");
+      const filesDiv = document.getElementById("files");
+      const uploadArea = document.querySelector(".upload-area");
+
+      const room = window.location.pathname.split("/").pop() || "default";
+      socket.emit("join", room);
+
+      editor.addEventListener("input", () => {
+        socket.emit("text", editor.value);
+      });
+
+      socket.on("text", (data) => {
+        if (editor.value !== data) editor.value = data;
+      });
+
+      // Show uploaded file link
+      function showFile(link) {
+        const el = document.createElement("div");
+        const decodedName = decodeURIComponent(link.split("/").pop());
+        el.innerHTML = `<a href="${link}" target="_blank" rel="noopener noreferrer">📎 ${decodedName}</a>`;
+        filesDiv.appendChild(el);
+      }
+
+      socket.on("file-uploaded", (link) => {
+        showFile(link);
+      });
+
+      // Upload handler
+      async function uploadFile(file) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          const res = await fetch("/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            socket.emit("file-uploaded", data.fileLink);
+            showFile(data.fileLink);
+          } else {
+            alert("Upload failed: " + data.message);
+          }
+        } catch (error) {
+          alert("Upload error: " + error.message);
+        }
+      }
+
+      // File input change
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) {
+          uploadFile(fileInput.files[0]);
+          fileInput.value = "";
+        }
+      });
+
+      // Drag & Drop support
+      uploadArea.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadArea.classList.add("dragover");
+      });
+
+      uploadArea.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove("dragover");
+      });
+
+      uploadArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove("dragover");
+        if (e.dataTransfer.files.length > 0) {
+          uploadFile(e.dataTransfer.files[0]);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
