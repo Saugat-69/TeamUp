@@ -476,6 +476,21 @@ textarea#editor::placeholder {
   font-size: 14px;
 }
 
+.developer-credit {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.developer-credit strong {
+  color: #667eea;
+  font-weight: 600;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   body {
