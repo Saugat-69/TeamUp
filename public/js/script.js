@@ -8,6 +8,7 @@ socket.on("connect_error", (error) => {
   joinBtn.disabled = false;
   joinBtn.innerHTML = '<span class="btn-text">Join Room</span><span class="btn-icon">🚀</span>';
 });
+
 const editor = document.getElementById("editor");
 const roomInput = document.getElementById("roomInput");
 const passwordInput = document.getElementById("passwordInput");
@@ -29,12 +30,12 @@ let fileCountNum = 0;
 function updateConnectionStatus(status, message) {
   connectionStatus.textContent = message;
   connectionStatus.className = `status-indicator ${status}`;
-  isConnected = status === 'connected';
+  isConnected = status === "connected";
 }
 
 function updateFileCount() {
   fileCountNum = fileList.children.length;
-  fileCount.textContent = `${fileCountNum} file${fileCountNum !== 1 ? 's' : ''}`;
+  fileCount.textContent = `${fileCountNum} file${fileCountNum !== 1 ? "s" : ""}`;
 }
 
 function updateDefaultRoom() {
@@ -105,7 +106,7 @@ function showNotification(message, type = "info") {
   notification.className = `notification ${type}`;
   notification.innerHTML = `
     <div class="notification-content">
-      <span class="notification-icon">${type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️'}</span>
+      <span class="notification-icon">${type === "error" ? "❌" : type === "success" ? "✅" : "ℹ️"}</span>
       <span class="notification-message">${message}</span>
     </div>
   `;
@@ -126,11 +127,11 @@ function showNotification(message, type = "info") {
 // Event Listeners
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOM loaded, initializing...");
-  console.log("Socket.IO available:", typeof io !== 'undefined');
+  console.log("Socket.IO available:", typeof io !== "undefined");
   console.log("Socket connected:", socket.connected);
-  
+
   updateDefaultRoom();
-  
+
   // Wait a bit for socket to connect before joining
   if (socket.connected) {
     joinRoom();
@@ -140,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
       joinRoom();
     });
   }
-  
+
   // Add keyboard shortcuts
   document.addEventListener("keydown", (e) => {
     // Ctrl/Cmd + Enter to join room
@@ -148,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       joinRoom();
     }
-    
+
     // Ctrl/Cmd + S to save (just focus editor for now)
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
@@ -164,8 +165,27 @@ joinBtn.addEventListener("click", joinRoom);
 // Editor events
 editor.addEventListener("input", () => {
   if (currentRoom && isConnected) {
-    socket.emit("text", editor.value);
+    socket.emit("text", { text: editor.value, user: "You" });
+    socket.emit("typing", "You");
   }
+});
+
+// Show who is typing
+const typingIndicator = document.createElement("div");
+typingIndicator.id = "typingIndicator";
+typingIndicator.style.marginTop = "4px";
+typingIndicator.style.fontStyle = "italic";
+typingIndicator.style.color = "#555";
+editor.parentNode.insertBefore(typingIndicator, editor.nextSibling);
+
+let typingTimeout;
+socket.on("typing", (user) => {
+  if (user === "You") return; // Don't show your own typing
+  typingIndicator.textContent = `${user} is typing...`;
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    typingIndicator.textContent = "";
+  }, 2000);
 });
 
 // Socket events
@@ -181,34 +201,26 @@ socket.on("disconnect", () => {
   isConnected = false;
 });
 
-
-
 socket.on("unauthorized", () => {
-  // Clear the connection timeout
   if (socket.connectionTimeout) {
     clearTimeout(socket.connectionTimeout);
     socket.connectionTimeout = null;
   }
-  
+
   showNotification("Incorrect password. Please try again.", "error");
   updateConnectionStatus("error", "Authentication Failed");
   joinBtn.disabled = false;
   joinBtn.innerHTML = '<span class="btn-text">Join Room</span><span class="btn-icon">🚀</span>';
 });
 
-// Handle successful room join (this event is emitted after text and file-list)
-socket.on("text", (msg) => {
-  console.log("Received text message:", msg ? "has content" : "empty");
-  editor.value = msg;
-  // If this is the first text message after joining, update the UI
+socket.on("text", ({ text, user }) => {
+  console.log("Received text message:", text ? "has content" : "empty", "from user:", user);
+  editor.value = text;
   if (joinBtn.disabled) {
-    console.log("First text message received, updating UI");
-    // Clear the connection timeout
     if (socket.connectionTimeout) {
       clearTimeout(socket.connectionTimeout);
       socket.connectionTimeout = null;
     }
-    
     showNotification(`Successfully joined room: ${currentRoom}`, "success");
     updateConnectionStatus("connected", "Connected");
     joinBtn.disabled = false;
@@ -216,7 +228,6 @@ socket.on("text", (msg) => {
   }
 });
 
-// File upload events
 dropArea.addEventListener("click", () => fileInput.click());
 
 dropArea.addEventListener("keydown", (e) => {
@@ -312,77 +323,84 @@ socket.on("file-list", (files) => {
 
 // Add CSS for notifications
 const notificationStyles = `
-  .notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: white;
-    border-radius: 12px;
-    padding: 16px 20px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-    border: 1px solid #e2e8f0;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-    z-index: 1000;
-    max-width: 300px;
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e2e8f0;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  z-index: 1000;
+  max-width: 300px;
+}
+
+.notification.show {
+  transform: translateX(0);
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.notification-icon {
+  font-size: 18px;
+}
+
+.notification-message {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.notification.error {
+  border-left: 4px solid #ef4444;
+}
+
+.notification.success {
+  border-left: 4px solid #10b981;
+}
+
+.notification.info {
+  border-left: 4px solid #3b82f6;
+}
+
+.drag-over {
+  border-color: #667eea !important;
+  background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%) !important;
+  transform: scale(1.02);
+}
+
+.uploading {
+  opacity: 0.7;
+  pointer-events: none;
+  position: relative;
+}
+
+.uploading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid #667eea;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
-  
-  .notification.show {
-    transform: translateX(0);
-  }
-  
-  .notification-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .notification-icon {
-    font-size: 18px;
-  }
-  
-  .notification-message {
-    font-size: 14px;
-    font-weight: 500;
-    color: #1e293b;
-  }
-  
-  .notification.error {
-    border-left: 4px solid #ef4444;
-  }
-  
-  .notification.success {
-    border-left: 4px solid #10b981;
-  }
-  
-  .notification.info {
-    border-left: 4px solid #3b82f6;
-  }
-  
-  .drag-over {
-    border-color: #667eea !important;
-    background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%) !important;
-    transform: scale(1.02);
-  }
-  
-  .uploading {
-    opacity: 0.7;
-    pointer-events: none;
-  }
-  
-  .uploading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 20px;
-    height: 20px;
-    margin: -10px 0 0 -10px;
-    border: 2px solid #667eea;
-    border-top: 2px solid transparent;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
+}
 `;
 
 // Inject notification styles

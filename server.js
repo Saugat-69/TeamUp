@@ -20,18 +20,22 @@ app.use("/uploads", express.static(uploadDir));
 
 let roomData = {}; // Stores { text, files, password, isPrivate }
 
-const CLEAN_INTERVAL = 60 * 1000;
-const EXPIRE_PUBLIC = 15 * 60 * 1000;
-const EXPIRE_PRIVATE = 30 * 60 * 1000;
+const CLEAN_INTERVAL = 60 * 1000; // 1 minute
+const EXPIRE_PUBLIC = 15 * 60 * 1000; // 15 minutes
+const EXPIRE_PRIVATE = 30 * 60 * 1000; // 30 minutes
 
 setInterval(() => {
   const now = Date.now();
   for (const room in roomData) {
     if (!roomData[room].files) continue;
-    roomData[room].files = roomData[room].files.filter(file => {
-      const expired = now - file.timestamp > (roomData[room].isPrivate ? EXPIRE_PRIVATE : EXPIRE_PUBLIC);
+    roomData[room].files = roomData[room].files.filter((file) => {
+      const expired =
+        now - file.timestamp >
+        (roomData[room].isPrivate ? EXPIRE_PRIVATE : EXPIRE_PUBLIC);
       if (expired) {
-        fs.unlink(path.join(uploadDir, file.filename), () => {});
+        fs.unlink(path.join(uploadDir, file.filename), (err) => {
+          if (err) console.error("Error deleting file:", err);
+        });
       }
       return !expired;
     });
@@ -42,6 +46,15 @@ io.on("connection", (socket) => {
   let joinedRoom = "";
 
   socket.on("join", ({ room, password, private: isPrivate }) => {
+    // Log the join attempt
+    console.log(`Socket ${socket.id} attempting to join room: ${room} (private: ${isPrivate})`);
+
+    // Leave previous room if any
+    if (joinedRoom) {
+      socket.leave(joinedRoom);
+      console.log(`Socket ${socket.id} left room: ${joinedRoom}`);
+    }
+
     if (roomData[room]) {
       if (roomData[room].isPrivate && roomData[room].password !== password) {
         socket.emit("unauthorized");
@@ -59,12 +72,16 @@ io.on("connection", (socket) => {
 
     joinedRoom = room;
     socket.join(room);
+    console.log(`Socket ${socket.id} joined room: ${room}`);
 
     socket.emit("text", roomData[room].text);
-    socket.emit("file-list", roomData[room].files.map(f => ({
-      link: `/uploads/${f.filename}`,
-      name: f.originalName,
-    })));
+    socket.emit(
+      "file-list",
+      roomData[room].files.map((f) => ({
+        link: `/uploads/${f.filename}`,
+        name: f.originalName,
+      }))
+    );
   });
 
   socket.on("text", (msg) => {
