@@ -8,7 +8,7 @@ console.log('📜 app.js loaded successfully');
 class TeamUpApp {
   constructor() {
     console.log('🏗️ Creating TeamUpApp instance...');
-    
+
     try {
       this.socket = io();
       console.log('✅ Socket.IO initialized');
@@ -16,7 +16,7 @@ class TeamUpApp {
       console.error('❌ Failed to initialize Socket.IO:', error);
       throw new Error('Socket.IO initialization failed');
     }
-    
+
     this.state = {
       currentRoom: '',
       currentUserId: null,
@@ -28,17 +28,17 @@ class TeamUpApp {
       adminTokens: {},
       mode: 'join'
     };
-    
+
     this.timers = {
       typingLock: null,
       typingActivity: null,
       connectionTimeout: null
     };
-    
+
     this.elements = {};
     this.isCurrentlyTyping = false;
     this.previousUserList = [];
-    
+
     console.log('✅ TeamUpApp instance created, starting initialization...');
     this.init();
   }
@@ -46,30 +46,30 @@ class TeamUpApp {
   async init() {
     try {
       console.log('🚀 Starting TeamUp initialization...');
-      
+
       await this.cacheElements();
       console.log('✅ Elements cached');
-      
+
       this.setupEventListeners();
       console.log('✅ Event listeners set up');
-      
+
       this.initializeUI();
       console.log('✅ UI initialized');
-      
+
       this.loadUserPreferences();
       console.log('✅ User preferences loaded');
-      
+
       this.setupSocketListeners();
       console.log('✅ Socket listeners set up');
-      
+
       console.log('✅ TeamUp initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize TeamUp:', error);
       console.error('Error stack:', error.stack);
-      
+
       // Show a more user-friendly error message
       const errorMsg = `Initialization failed: ${error.message}`;
-      
+
       // Try to show notification even if elements aren't cached
       try {
         this.showNotification(errorMsg, 'error');
@@ -84,7 +84,7 @@ class TeamUpApp {
         `;
         notification.textContent = errorMsg;
         document.body.appendChild(notification);
-        
+
         setTimeout(() => notification.remove(), 5000);
       }
     }
@@ -113,7 +113,7 @@ class TeamUpApp {
 
     this.elements.configFormSection = document.querySelector('.config-form-section');
     this.elements.roomListSection = document.querySelector('.room-list-section');
-    
+
     if (!this.elements.configFormSection) {
       console.warn('⚠️ .config-form-section not found');
     }
@@ -223,7 +223,7 @@ class TeamUpApp {
     if (!this.elements.dropArea || !this.elements.fileInput) return;
 
     this.elements.dropArea.addEventListener('click', () => this.elements.fileInput.click());
-    
+
     this.elements.dropArea.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -253,8 +253,8 @@ class TeamUpApp {
         this.uploadFile(this.elements.fileInput.files[0]);
       }
     });
-  } 
- setupSocketListeners() {
+  }
+  setupSocketListeners() {
     // Socket listeners are already set up in setupEventListeners
   }
 
@@ -340,10 +340,10 @@ class TeamUpApp {
     console.log('✅ Connected to server:', this.socket.id);
     this.updateConnectionStatus('connected', 'Connected');
     this.state.isConnected = true;
-    
+
     this.hideLoadingScreen();
     this.addRoomActivity('Connected to server', 'success');
-    
+
     this.socket.emit('who');
     this.socket.emit('get-typing-lock-status');
   }
@@ -359,7 +359,7 @@ class TeamUpApp {
     console.error('❌ Connection error:', error);
     this.showNotification('Failed to connect to server. Please check if the server is running.', 'error');
     this.updateConnectionStatus('error', 'Connection Failed');
-    
+
     this.hideLoadingScreen();
     this.resetJoinButton();
   }
@@ -380,25 +380,25 @@ class TeamUpApp {
     this.showNotification(`Successfully joined room: ${this.state.currentRoom}`, 'success');
     this.updateConnectionStatus('connected', 'Connected');
     this.resetJoinButton();
-    
+
     if (this.elements.joinBtn) {
       const btnText = this.elements.joinBtn.querySelector('.btn-text');
       const btnIcon = this.elements.joinBtn.querySelector('.btn-content i');
       if (btnText) btnText.textContent = 'Connected';
       if (btnIcon) btnIcon.className = 'fas fa-check';
     }
-    
+
     this.addRoomActivity(`Successfully joined room: ${this.state.currentRoom}`, 'success');
-    
+
     this.hideRoomConfig();
     this.showLeaveRoomButton();
-    
+
     // Update footer stats when joining a room
     this.updateFooterStats(0);
-    
+
     this.socket.emit('who');
     this.socket.emit('get-typing-lock-status');
-    
+
     const savedName = localStorage.getItem('displayName');
     if (savedName) {
       this.socket.emit('set-name', { name: savedName, room: this.state.currentRoom });
@@ -420,21 +420,21 @@ class TeamUpApp {
 
   handleUserData(data) {
     const { room, id, name, role, muted, adminToken: newAdminToken } = data;
-    
+
     if (this.elements.displayNameInput) {
       this.elements.displayNameInput.value = name || '';
     }
-    
+
     this.savePreference('displayName', name);
-    
+
     this.state.currentUserId = id || this.state.currentUserId;
     this.state.currentUserRole = role || this.state.currentUserRole;
     this.state.isMuted = Boolean(muted);
-    
+
     if (this.elements.editor) {
       this.elements.editor.disabled = this.state.isMuted;
     }
-    
+
     if (newAdminToken && room) {
       this.state.adminTokens[room] = newAdminToken;
       this.savePreference('adminTokens', JSON.stringify(this.state.adminTokens));
@@ -452,7 +452,7 @@ class TeamUpApp {
 
   handleFileList(files) {
     if (!this.elements.fileList) return;
-    
+
     this.elements.fileList.innerHTML = '';
     files.forEach(file => {
       const fileItem = this.renderFileItem(file);
@@ -463,7 +463,7 @@ class TeamUpApp {
 
   handleFileDeleted(filename) {
     if (!this.elements.fileList) return;
-    
+
     const items = Array.from(this.elements.fileList.children);
     items.forEach(item => {
       const btn = item.querySelector('.delete-file');
@@ -490,7 +490,7 @@ class TeamUpApp {
     this.state.typingLockStatus.isLocked = true;
     this.state.typingLockStatus.lockedByUser = lockedByUser;
     this.updateEditorLockStatus();
-    
+
     if (lockedByUser !== 'You') {
       this.showNotification(`${lockedByUser} is now typing`, 'info');
     }
@@ -509,14 +509,8 @@ class TeamUpApp {
   }
 
   handleKicked(room, movedTo) {
-    if (movedTo) {
-      this.showNotification(`You were moved from ${room} to ${movedTo} room`, 'warning');
-      this.addRoomActivity(`Moved to ${movedTo} room`, 'warning');
-      this.state.currentRoom = movedTo;
-    } else {
-      this.showNotification(`You have been removed from room: ${room}`, 'error');
-      this.addRoomActivity(`Removed from ${room}`, 'error');
-    }
+    // Force a reload to ensure clean state and prevent any lingering access
+    window.location.href = window.location.origin;
   }
 
   handleMuted(room, muted) {
@@ -524,20 +518,20 @@ class TeamUpApp {
       muted ? `You were muted in ${room}` : `You were unmuted in ${room}`,
       muted ? 'error' : 'success'
     );
-    
+
     if (this.elements.editor) {
       this.elements.editor.disabled = muted;
-      this.elements.editor.placeholder = muted 
-        ? 'You are muted by admin. You cannot type.' 
+      this.elements.editor.placeholder = muted
+        ? 'You are muted by admin. You cannot type.'
         : this.elements.editor.placeholder;
     }
   }
 
   handleTypingIndicator(user) {
     if (user === 'You' || !this.elements.typingIndicator) return;
-    
+
     this.elements.typingIndicator.textContent = `${user} is typing...`;
-    
+
     clearTimeout(this.timers.typingIndicator);
     this.timers.typingIndicator = setTimeout(() => {
       if (this.elements.typingIndicator) {
@@ -566,8 +560,8 @@ class TeamUpApp {
   }
 
   handleEditorFocus() {
-    if (this.state.currentRoom && this.state.isConnected && 
-        !this.state.hasTypingLock && !this.state.typingLockStatus.isLocked) {
+    if (this.state.currentRoom && this.state.isConnected &&
+      !this.state.hasTypingLock && !this.state.typingLockStatus.isLocked) {
       this.requestTypingLock();
     }
   }
@@ -594,11 +588,11 @@ class TeamUpApp {
         this.elements.editor.focus();
       }
     }
-  }  
-// Core Methods
+  }
+  // Core Methods
   setMode(newMode) {
     this.state.mode = newMode;
-    
+
     if (newMode === 'join') {
       if (this.elements.tabJoin) this.elements.tabJoin.classList.add('active');
       if (this.elements.tabCreate) this.elements.tabCreate.classList.remove('active');
@@ -614,7 +608,7 @@ class TeamUpApp {
         if (btnText) btnText.textContent = 'Create Room';
       }
     }
-    
+
     this.updateDefaultRoom();
     this.fetchRooms();
     this.addRoomActivity(`Switched to ${newMode === 'join' ? 'Join' : 'Create'} Room mode`, 'info');
@@ -643,9 +637,9 @@ class TeamUpApp {
 
   async joinRoom() {
     console.log('🚀 joinRoom() called');
-    
+
     if (!this.elements.roomInput) return;
-    
+
     const roomName = this.elements.roomInput.value.trim();
     const password = (this.elements.passwordInput && this.elements.passwordInput.value) || '';
     const isLAN = this.elements.connectionType && this.elements.connectionType.value === 'lan';
@@ -661,7 +655,7 @@ class TeamUpApp {
     const finalRoom = this.state.mode === 'join'
       ? (roomName || (isLAN ? 'lan_world' : 'world'))
       : roomName || (isLAN ? 'lan_world' : 'world');
-    
+
     this.state.currentRoom = finalRoom;
 
     if (roomName) {
@@ -695,11 +689,11 @@ class TeamUpApp {
 
   leaveRoom() {
     if (!this.state.currentRoom) return;
-    
+
     this.addRoomActivity(`Left room: ${this.state.currentRoom}`, 'warning');
     this.socket.emit('leave', { room: this.state.currentRoom });
     this.state.currentRoom = '';
-    
+
     this.showRoomConfig();
     this.hideLeaveRoomButton();
     this.resetJoinButton();
@@ -707,12 +701,12 @@ class TeamUpApp {
 
   async setUserName() {
     if (!this.elements.displayNameInput || !this.elements.setNameBtn) return;
-    
+
     const name = this.elements.displayNameInput.value.trim();
     if (!name) return;
 
     this.elements.setNameBtn.classList.add('saving');
-    
+
     this.socket.emit('set-name', { name, room: this.state.currentRoom }, (ok) => {
       if (ok) {
         this.showNotification('Name updated', 'success');
@@ -734,12 +728,12 @@ class TeamUpApp {
 
   releaseTypingLock() {
     if (!this.state.currentRoom || !this.state.isConnected || !this.state.hasTypingLock) return;
-    
+
     this.socket.emit('release-typing-lock');
     this.state.hasTypingLock = false;
     this.isCurrentlyTyping = false;
     this.updateEditorLockStatus();
-    
+
     this.clearTimer('typingLock');
     this.clearTimer('typingActivity');
   }
@@ -806,14 +800,14 @@ class TeamUpApp {
         this.releaseTypingLock();
       }
     }, 1000);
-  }  
-// File Upload Methods
+  }
+  // File Upload Methods
   async uploadFile(file) {
     if (!this.state.currentRoom) {
       this.showNotification('Please join a room first', 'error');
       return;
     }
-    
+
     if (!this.state.isConnected) {
       this.showNotification('Not connected to server', 'error');
       return;
@@ -836,9 +830,9 @@ class TeamUpApp {
         method: 'POST',
         body: formData
       });
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
         this.socket.emit('file-uploaded', {
           filename: data.filename,
@@ -870,19 +864,19 @@ class TeamUpApp {
     try {
       console.log('🔍 fetchRooms() called');
       this.addRoomActivity('Fetching available rooms...', 'info');
-      
+
       const response = await fetch('/rooms', { cache: 'no-store' });
       console.log('Rooms response status:', response.status);
-      
+
       const data = await response.json();
       console.log('Rooms data:', data);
-      
+
       if (!data || !data.success) {
         console.warn('Rooms fetch failed', data);
         this.addRoomActivity('Failed to fetch rooms', 'error');
         return;
       }
-      
+
       console.debug('Rooms fetched:', data.rooms);
       this.addRoomActivity(`Found ${data.rooms.length} available rooms`, 'success');
       this.renderRoomList(data.rooms || []);
@@ -911,7 +905,7 @@ class TeamUpApp {
             this.elements.roomInput.value = 'world';
           }
           this.state.currentRoom = 'world';
-          
+
           if (this.socket.connected) {
             this.joinRoom();
           } else {
@@ -932,7 +926,7 @@ class TeamUpApp {
       this.elements.roomInput.value = 'world';
     }
     this.state.currentRoom = 'world';
-    
+
     if (this.socket.connected) {
       this.joinRoom();
     } else {
@@ -943,7 +937,7 @@ class TeamUpApp {
   // UI Methods
   updateConnectionStatus(status, message) {
     if (!this.elements.connectionStatus) return;
-    
+
     const statusIndicator = this.elements.connectionStatus;
     const icon = statusIndicator.querySelector('i');
     const text = statusIndicator.querySelector('span');
@@ -976,7 +970,7 @@ class TeamUpApp {
 
   showNotification(message, type) {
     type = type || 'info';
-    
+
     try {
       const notification = document.createElement('div');
       notification.className = `notification ${type}`;
@@ -1053,8 +1047,8 @@ class TeamUpApp {
 
   clearRoomActivity() {
     if (!this.elements.activityContent) return;
-    
-    this.elements.activityContent.innerHTML = 
+
+    this.elements.activityContent.innerHTML =
       '<div class="activity-message">Welcome to the room! Activity updates will appear here...</div>';
   }
 
@@ -1104,7 +1098,7 @@ class TeamUpApp {
     if (!this.elements.joinBtn) return;
 
     this.elements.joinBtn.disabled = loading;
-    
+
     if (loading) {
       this.elements.joinBtn.classList.add('loading');
       const btnContent = this.elements.joinBtn.querySelector('.btn-content');
@@ -1129,7 +1123,7 @@ class TeamUpApp {
     const btnLoading = this.elements.joinBtn.querySelector('.btn-loading');
     const btnText = this.elements.joinBtn.querySelector('.btn-text');
     const btnIcon = this.elements.joinBtn.querySelector('.btn-content i');
-    
+
     if (btnContent) btnContent.style.opacity = '1';
     if (btnLoading) btnLoading.style.opacity = '0';
     if (btnText) btnText.textContent = 'Join Room';
@@ -1162,7 +1156,7 @@ class TeamUpApp {
   setTheme(themeName) {
     // Update root data attribute
     document.documentElement.setAttribute('data-theme', themeName);
-    
+
     // Update active theme option
     const themeOptions = document.querySelectorAll('.theme-option');
     themeOptions.forEach(option => {
@@ -1171,18 +1165,18 @@ class TeamUpApp {
         option.classList.add('active');
       }
     });
-    
+
     // Save preference
     this.savePreference('selectedTheme', themeName);
     this.addRoomActivity(`Theme changed to ${themeName}`, 'info');
-    
+
     console.log(`🎨 Theme changed to: ${themeName}`);
   }
 
   toggleThemeSelector() {
     if (this.elements.themeSelectorPanel) {
       this.elements.themeSelectorPanel.classList.toggle('open');
-      
+
       if (this.elements.toggleThemeSelector) {
         this.elements.toggleThemeSelector.classList.toggle('active');
       }
@@ -1205,7 +1199,7 @@ class TeamUpApp {
         const visible = !this.elements.uploadForm.classList.contains('hidden');
         this.setButtonActive(this.elements.toggleShare, visible);
       }
-      
+
       if (this.elements.downloadsPanel) {
         this.elements.downloadsPanel.classList.add('hidden');
       }
@@ -1216,7 +1210,7 @@ class TeamUpApp {
         const visible = !this.elements.downloadsPanel.classList.contains('hidden');
         this.setButtonActive(this.elements.toggleDownloads, visible);
       }
-      
+
       if (this.elements.uploadForm) {
         this.elements.uploadForm.classList.add('hidden');
       }
@@ -1226,7 +1220,7 @@ class TeamUpApp {
 
   setButtonActive(button, active) {
     if (!button) return;
-    
+
     if (active) {
       button.classList.add('active');
     } else {
@@ -1236,7 +1230,7 @@ class TeamUpApp {
 
   updateFileCount() {
     if (!this.elements.fileList || !this.elements.fileCount) return;
-    
+
     const fileCountNum = this.elements.fileList.children.length;
     this.elements.fileCount.textContent = `${fileCountNum} file${fileCountNum !== 1 ? 's' : ''}`;
   }
@@ -1246,7 +1240,7 @@ class TeamUpApp {
       this.elements.userCount.textContent = count;
       this.elements.userCount.style.animation = 'pulse 0.5s ease';
     }
-    
+
     // Update footer stats
     this.updateFooterStats(count);
   }
@@ -1256,7 +1250,7 @@ class TeamUpApp {
     if (this.elements.onlineUsers) {
       this.elements.onlineUsers.textContent = userCount || 0;
     }
-    
+
     // Update active rooms count (simplified - just show 1 if in a room, 0 if not)
     if (this.elements.activeRooms) {
       this.elements.activeRooms.textContent = this.state.currentRoom ? 1 : 0;
@@ -1268,7 +1262,7 @@ class TeamUpApp {
     if (!this.elements.roomList) return;
 
     this.elements.roomList.innerHTML = '';
-    
+
     if (!rooms.length) {
       const emptyState = document.createElement('div');
       emptyState.className = 'empty-state';
@@ -1286,7 +1280,7 @@ class TeamUpApp {
       roomPill.className = 'room-pill';
       roomPill.style.animationDelay = `${index * 0.1}s`;
       roomPill.style.animation = 'slideInUp 0.3s ease both';
-      
+
       roomPill.innerHTML = `
         <div class="room-info">
           <i class="fas fa-home"></i>
@@ -1296,7 +1290,7 @@ class TeamUpApp {
           <i class="fas ${room.isPrivate ? 'fa-lock' : 'fa-unlock'}"></i>
         </div>
       `;
-      
+
       roomPill.addEventListener('click', () => this.handleRoomClick(room));
       this.elements.roomList.appendChild(roomPill);
     });
@@ -1306,7 +1300,7 @@ class TeamUpApp {
     if (this.elements.roomInput) {
       this.elements.roomInput.value = room.name;
     }
-    
+
     if (room.isPrivate && this.elements.passwordInput) {
       this.elements.passwordInput.focus();
     } else {
@@ -1357,12 +1351,12 @@ class TeamUpApp {
     const deleteBtn = fileItem.querySelector('.delete-file');
     deleteBtn.addEventListener('click', async () => {
       if (!confirm('Delete this file?')) return;
-      
+
       try {
         const url = `/upload?room=${encodeURIComponent(this.state.currentRoom)}&filename=${encodeURIComponent(filename)}`;
         const response = await fetch(url, { method: 'DELETE' });
         const data = await response.json().catch(() => ({ success: false }));
-        
+
         if (!response.ok || !data.success) {
           throw new Error('Failed');
         }
@@ -1372,8 +1366,8 @@ class TeamUpApp {
     });
 
     return fileItem;
-  } 
- renderUserList(users) {
+  }
+  renderUserList(users) {
     if (!this.elements.userList) return;
 
     const currentUsers = users || [];
@@ -1395,7 +1389,7 @@ class TeamUpApp {
     }
 
     this.elements.userList.innerHTML = '';
-    
+
     currentUsers.forEach((user, index) => {
       const userItem = document.createElement('div');
       userItem.className = `user-item ${user.role === 'admin' ? 'admin' : ''} ${user.muted ? 'muted' : ''}`;
@@ -1423,15 +1417,19 @@ class TeamUpApp {
         const controls = document.createElement('div');
         controls.className = 'user-controls';
 
+        // Mute/Unmute Button
         const muteBtn = document.createElement('button');
         muteBtn.className = 'control-btn';
-        muteBtn.innerHTML = `<i class="fas ${user.muted ? 'fa-volume-up' : 'fa-volume-mute'}"></i>`;
+        muteBtn.innerHTML = `<i class="fas ${user.muted ? 'fa-keyboard' : 'fa-ban'}"></i>`;
         muteBtn.title = user.muted ? 'Unmute' : 'Mute';
         muteBtn.addEventListener('click', () => {
           this.socket.emit('mute-user', { room: this.state.currentRoom, targetId: user.id, muted: !user.muted });
           this.addRoomActivity(`${user.name} ${user.muted ? 'unmuted' : 'muted'}`, 'info');
         });
 
+
+
+        // Kick Button
         const kickBtn = document.createElement('button');
         kickBtn.className = 'control-btn';
         kickBtn.innerHTML = '<i class="fas fa-user-times"></i>';
@@ -1468,11 +1466,11 @@ class TeamUpApp {
 
   destroy() {
     Object.keys(this.timers).forEach(timer => this.clearTimer(timer));
-    
+
     if (this.socket) {
       this.socket.disconnect();
     }
-    
+
     console.log('TeamUp app destroyed');
   }
 }
@@ -1582,7 +1580,7 @@ const notificationStyles = `
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   console.log('📄 DOM Content Loaded');
-  
+
   // Add a small delay to ensure all elements are rendered
   setTimeout(() => {
     try {
@@ -1602,7 +1600,7 @@ document.addEventListener('DOMContentLoaded', () => {
       window.teamUpApp = new TeamUpApp();
     } catch (error) {
       console.error('❌ Failed to initialize application:', error);
-      
+
       // Show error message on page
       const errorDiv = document.createElement('div');
       errorDiv.style.cssText = `
@@ -1627,7 +1625,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ">Reload Page</button>
       `;
       document.body.appendChild(errorDiv);
-      
+
       // Hide loading screen if it exists
       const loadingScreen = document.getElementById('loadingScreen');
       if (loadingScreen) {

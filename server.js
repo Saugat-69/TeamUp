@@ -53,7 +53,7 @@ const storage = multer.diskStorage({
     cb(null, `${timestamp}-${sanitizedName}`);
   },
 });
-const upload = multer({ 
+const upload = multer({
   storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
@@ -75,7 +75,7 @@ const upload = multer({
       'application/zip',
       'application/x-rar-compressed'
     ];
-    
+
     if (allowedMimes.includes(file.mimetype) || file.mimetype.startsWith('text/')) {
       cb(null, true);
     } else {
@@ -106,26 +106,26 @@ let roomData = {}; // Stores: { text, files, password, isPrivate, isLAN, lanIPs,
 async function hydrateRoomFilesFromDisk(room) {
   try {
     const dir = path.join(uploadDir, room);
-    
+
     try {
       await fs.access(dir);
     } catch {
       return [];
     }
-    
+
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const files = entries
       .filter((e) => e.isFile())
       .map((e) => e.name);
-    
+
     return files.map((fname) => {
       const dashIdx = fname.indexOf("-");
       const originalName = dashIdx > -1 ? fname.slice(dashIdx + 1).replace(/_/g, ' ') : fname;
-      
+
       // Extract timestamp from filename
       const timestampMatch = fname.match(/^(\d+)-/);
       const timestamp = timestampMatch ? parseInt(timestampMatch[1]) : Date.now();
-      
+
       return { filename: fname, originalName, timestamp };
     });
   } catch (e) {
@@ -137,7 +137,7 @@ async function hydrateRoomFilesFromDisk(room) {
 async function listRooms() {
   try {
     const diskRooms = new Set();
-    
+
     try {
       const entries = await fs.readdir(uploadDir, { withFileTypes: true });
       entries
@@ -146,10 +146,10 @@ async function listRooms() {
     } catch (e) {
       console.warn("⚠️ Could not read upload directory:", e.message);
     }
-    
+
     const memoryRooms = Object.keys(roomData || {});
     memoryRooms.forEach(r => diskRooms.add(r));
-    
+
     return Array.from(diskRooms)
       .filter(name => name && name.length > 0)
       .map((name) => ({
@@ -175,7 +175,7 @@ function pruneRoomUsers(room) {
       const inThisRoom = !!(sock && sock.rooms && sock.rooms.has(room));
       if (!inThisRoom) info.users.delete(socketId);
     }
-  } catch {}
+  } catch { }
 }
 
 function ensureSingleAdmin(room) {
@@ -200,32 +200,32 @@ const EXPIRE_PRIVATE = 30 * 60 * 1000; // 30 minutes
 setInterval(async () => {
   const now = Date.now();
   const cleanupPromises = [];
-  
+
   for (const room in roomData) {
     if (!roomData[room].files) continue;
-    
+
     const expiredFiles = [];
     roomData[room].files = roomData[room].files.filter((file) => {
-      const expired = now - file.timestamp > 
+      const expired = now - file.timestamp >
         (roomData[room].isPrivate ? EXPIRE_PRIVATE : EXPIRE_PUBLIC);
-      
+
       if (expired) {
         expiredFiles.push(file);
       }
-      
+
       return !expired;
     });
-    
+
     // Delete expired files
     expiredFiles.forEach(file => {
       const filePath = path.join(uploadDir, room, file.filename);
       cleanupPromises.push(
-        fs.unlink(filePath).catch(err => 
+        fs.unlink(filePath).catch(err =>
           console.warn(`⚠️ Could not delete file ${filePath}:`, err.message)
         )
       );
     });
-    
+
     // Remove empty room folders that were never used by more than one connector in 24h
     try {
       const info = roomData[room];
@@ -239,7 +239,7 @@ setInterval(async () => {
           fs.rmdir(dir, { recursive: true }).then(() => {
             delete roomData[room];
             console.log(`🧹 Cleaned up unused room: ${room}`);
-          }).catch(err => 
+          }).catch(err =>
             console.warn(`⚠️ Could not remove room directory ${dir}:`, err.message)
           )
         );
@@ -248,7 +248,7 @@ setInterval(async () => {
       console.error("❌ Cleanup error:", e);
     }
   }
-  
+
   // Wait for all cleanup operations to complete
   await Promise.allSettled(cleanupPromises);
 }, CLEAN_INTERVAL);
@@ -279,7 +279,7 @@ io.on("connection", (socket) => {
     pruneRoomUsers(joinedRoom);
     const users = roomData[joinedRoom]?.users;
     if (users) {
-      socket.emit("user-list", Array.from(users.entries()).map(([id,u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
+      socket.emit("user-list", Array.from(users.entries()).map(([id, u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
       const me = users.get(socket.id);
       if (me) socket.emit('you', { id: socket.id, name: me.name, role: me.role, muted: !!me.muted });
     }
@@ -356,7 +356,7 @@ io.on("connection", (socket) => {
     // Track unique connectors for the room
     try {
       roomData[room].connectors.add(getIp(socket));
-    } catch {}
+    } catch { }
 
     // Register user as Guest N
     try {
@@ -372,21 +372,23 @@ io.on("connection", (socket) => {
       if (!roomData[room].adminSocketId) {
         // No admin assigned yet, make this user the admin
         role = 'admin';
-        roomData[room].adminToken = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+        roomData[room].adminToken = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         roomData[room].adminSocketId = socket.id;
       } else if (clientAdminToken && clientAdminToken === roomData[room].adminToken) {
-        // Transfer admin to this socket; demote previous admin if present
-        role = 'admin';
+        // Only reclaim admin if the previous admin is NOT in the room (or it's a re-join from same user if that were possible)
+        // If an admin exists and is connected, do NOT steal leadership merely by having the token (prevents multi-tab stealing)
         const prevAdminId = roomData[room].adminSocketId;
-        if (prevAdminId && existingUsers.has(prevAdminId) && prevAdminId !== socket.id) {
-          const prev = existingUsers.get(prevAdminId);
-          existingUsers.set(prevAdminId, { ...prev, role: 'member' });
+        const adminIsActive = prevAdminId && existingUsers.has(prevAdminId);
+
+        if (!adminIsActive) {
+          role = 'admin';
+          roomData[room].adminSocketId = socket.id;
         }
-        roomData[room].adminSocketId = socket.id;
+        // If adminIsActive is true, we simply ignore the token and join as member.
       }
       existingUsers.set(socket.id, { name: userName, role });
       ensureSingleAdmin(room);
-      io.to(room).emit("user-list", Array.from(existingUsers.entries()).map(([id,u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
+      io.to(room).emit("user-list", Array.from(existingUsers.entries()).map(([id, u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
       socket.emit('you', { room, id: socket.id, name: userName, role, muted: false, adminToken: role === 'admin' ? roomData[room].adminToken : undefined });
     } catch (e) { console.error('user add error', e); }
 
@@ -431,10 +433,10 @@ io.on("connection", (socket) => {
     if (!joinedRoom) return;
     const info = roomData[joinedRoom];
     if (!info || info?.users?.get(socket.id)?.muted) return;
-    
+
     const now = Date.now();
     const lockTimeout = 30000; // 30 seconds timeout
-    
+
     // Check if lock is available or expired
     if (!info.typingLock || (now - info.typingLock.lockedAt) > lockTimeout) {
       info.typingLock = {
@@ -461,7 +463,7 @@ io.on("connection", (socket) => {
     if (!joinedRoom) return;
     const info = roomData[joinedRoom];
     if (!info || !info.typingLock || info.typingLock.lockedBy !== socket.id) return;
-    
+
     delete info.typingLock;
     socket.to(joinedRoom).emit("typing-lock-released");
   });
@@ -470,10 +472,10 @@ io.on("connection", (socket) => {
     if (!joinedRoom) return;
     const info = roomData[joinedRoom];
     if (!info) return;
-    
+
     const now = Date.now();
     const lockTimeout = 30000; // 30 seconds timeout
-    
+
     if (info.typingLock && (now - info.typingLock.lockedAt) <= lockTimeout) {
       socket.emit("typing-lock-status", {
         isLocked: true,
@@ -496,16 +498,16 @@ io.on("connection", (socket) => {
     if (!joinedRoom) return;
     const info = roomData[joinedRoom];
     if (!info || !info.typingLock || info.typingLock.lockedBy !== socket.id) return;
-    
+
     info.typingLock.isActive = isTyping;
-    
+
     // If user stopped typing, set a timeout to release the lock
     if (!isTyping) {
       setTimeout(() => {
         const currentInfo = roomData[joinedRoom];
-        if (currentInfo && currentInfo.typingLock && 
-            currentInfo.typingLock.lockedBy === socket.id && 
-            !currentInfo.typingLock.isActive) {
+        if (currentInfo && currentInfo.typingLock &&
+          currentInfo.typingLock.lockedBy === socket.id &&
+          !currentInfo.typingLock.isActive) {
           delete currentInfo.typingLock;
           io.to(joinedRoom).emit("typing-lock-released");
         }
@@ -523,7 +525,7 @@ io.on("connection", (socket) => {
     if (!users) { if (ack) ack(false); return; }
     const existing = users.get(socket.id) || { role: (roomData[targetRoom].adminSocketId === socket.id ? 'admin' : 'member') };
     users.set(socket.id, { name: safe, role: existing.role });
-    io.to(targetRoom).emit('user-list', Array.from(users.entries()).map(([id,u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
+    io.to(targetRoom).emit('user-list', Array.from(users.entries()).map(([id, u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
     socket.emit('you', { id: socket.id, name: safe, role: existing.role, muted: !!existing.muted });
     if (ack) ack(true);
   });
@@ -536,7 +538,7 @@ io.on("connection", (socket) => {
       if (!info.users || !info.users.has(targetId)) { if (ack) ack(false); return; }
       const u = info.users.get(targetId);
       u.muted = Boolean(muted);
-      io.to(room).emit('user-list', Array.from(info.users.entries()).map(([id,usr]) => ({ id, name: usr.name, role: usr.role, muted: !!usr.muted })));
+      io.to(room).emit('user-list', Array.from(info.users.entries()).map(([id, usr]) => ({ id, name: usr.name, role: usr.role, muted: !!usr.muted })));
       io.to(targetId).emit('muted', { room, muted: u.muted });
       if (ack) ack(true);
     } catch (e) { if (ack) ack(false); }
@@ -548,13 +550,13 @@ io.on("connection", (socket) => {
       const info = roomData[room];
       if (!info || info.adminSocketId !== socket.id) { if (ack) ack(false); return; }
       if (!info.users || !info.users.has(targetId)) { if (ack) ack(false); return; }
-      
+
       const targetSocket = io.sockets.sockets.get(targetId);
       if (targetSocket) {
         // Remove user from current room
         targetSocket.leave(room);
         info.users.delete(targetId);
-        
+
         // Auto-join user to "world" room
         const worldRoom = "world";
         if (!roomData[worldRoom]) {
@@ -572,17 +574,17 @@ io.on("connection", (socket) => {
             adminToken: undefined,
           };
         }
-        
+
         // Add user to world room
         targetSocket.join(worldRoom);
         const userInfo = info.users.get(targetId);
         if (userInfo) {
           roomData[worldRoom].users.set(targetId, { ...userInfo, role: 'member' });
         }
-        
+
         // Notify user they were kicked and moved to world room
         targetSocket.emit('kicked', { room, movedTo: worldRoom });
-        
+
         // Send world room data to kicked user
         targetSocket.emit("text", roomData[worldRoom].text);
         targetSocket.emit("file-list", roomData[worldRoom].files.map((f) => ({
@@ -590,15 +592,14 @@ io.on("connection", (socket) => {
           name: f.originalName,
           filename: f.filename,
         })));
-        targetSocket.emit('user-list', Array.from(roomData[worldRoom].users.entries()).map(([id,usr]) => ({ id, name: usr.name, role: usr.role, muted: !!usr.muted })));
+        targetSocket.emit('user-list', Array.from(roomData[worldRoom].users.entries()).map(([id, usr]) => ({ id, name: usr.name, role: usr.role, muted: !!usr.muted })));
       }
-      
+
       // Update original room user list
-      io.to(room).emit('user-list', Array.from(info.users.entries()).map(([id,usr]) => ({ id, name: usr.name, role: usr.role, muted: !!usr.muted })));
-      
+      io.to(room).emit('user-list', Array.from(info.users.entries()).map(([id, usr]) => ({ id, name: usr.name, role: usr.role, muted: !!usr.muted })));
+
       // Update world room user list
-      io.to("world").emit('user-list', Array.from(roomData["world"].users.entries()).map(([id,usr]) => ({ id, name: usr.name, role: usr.role, muted: !!usr.muted })));
-      
+      io.to("world").emit('user-list', Array.from(roomData["world"].users.entries()).map(([id, usr]) => ({ id, name: usr.name, role: usr.role, muted: !!usr.muted })));
       if (ack) ack(true);
     } catch (e) { if (ack) ack(false); }
   });
@@ -610,30 +611,30 @@ io.on("connection", (socket) => {
     if (users) {
       users.delete(socket.id);
       if (roomData[joinedRoom].adminSocketId === socket.id) roomData[joinedRoom].adminSocketId = undefined;
-      
+
       // Release typing lock if this user had it
       if (roomData[joinedRoom].typingLock && roomData[joinedRoom].typingLock.lockedBy === socket.id) {
         delete roomData[joinedRoom].typingLock;
         io.to(joinedRoom).emit("typing-lock-released");
       }
-      
-      io.to(joinedRoom).emit("user-list", Array.from(users.entries()).map(([id,u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
+
+      io.to(joinedRoom).emit("user-list", Array.from(users.entries()).map(([id, u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
     }
   });
 
-// Periodically prune users for all rooms (handles abrupt reloads/network drops)
-setInterval(() => {
-  try {
-    for (const room of Object.keys(roomData)) {
-      const before = roomData[room]?.users?.size || 0;
-      pruneRoomUsers(room);
-      const after = roomData[room]?.users?.size || 0;
-      if (before !== after) {
-        io.to(room).emit('user-list', Array.from(roomData[room].users.entries()).map(([id,u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
+  // Periodically prune users for all rooms (handles abrupt reloads/network drops)
+  setInterval(() => {
+    try {
+      for (const room of Object.keys(roomData)) {
+        const before = roomData[room]?.users?.size || 0;
+        pruneRoomUsers(room);
+        const after = roomData[room]?.users?.size || 0;
+        if (before !== after) {
+          io.to(room).emit('user-list', Array.from(roomData[room].users.entries()).map(([id, u]) => ({ id, name: u.name, role: u.role, muted: !!u.muted })));
+        }
       }
-    }
-  } catch {}
-}, 10000); // every 10s
+    } catch { }
+  }, 10000); // every 10s
 
   socket.on("file-uploaded", ({ filename, originalName, room }) => {
     if (!roomData[room]) return;
@@ -659,26 +660,26 @@ setInterval(() => {
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'File too large. Maximum size is 10MB.' 
+      return res.status(400).json({
+        success: false,
+        error: 'File too large. Maximum size is 10MB.'
       });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Too many files. Upload one file at a time.' 
+      return res.status(400).json({
+        success: false,
+        error: 'Too many files. Upload one file at a time.'
       });
     }
   }
-  
+
   if (error.message === 'File type not allowed') {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'File type not allowed. Please upload documents, images, or videos.' 
+    return res.status(400).json({
+      success: false,
+      error: 'File type not allowed. Please upload documents, images, or videos.'
     });
   }
-  
+
   console.error('❌ Upload error:', error);
   res.status(500).json({ success: false, error: 'Upload failed' });
 });
@@ -687,18 +688,18 @@ app.use((error, req, res, next) => {
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No file provided' 
+      return res.status(400).json({
+        success: false,
+        error: 'No file provided'
       });
     }
-    
+
     const room = resolveRoomFromReq(req);
     const fileSize = req.file.size;
     const fileSizeKB = Math.round(fileSize / 1024);
-    
+
     console.log(`📁 Uploaded file to room: ${room}, file: ${req.file.filename} (${fileSizeKB}KB)`);
-    
+
     res.json({
       success: true,
       filename: req.file.filename,
@@ -709,9 +710,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     });
   } catch (error) {
     console.error('❌ File upload error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to process file upload' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process file upload'
     });
   }
 });
@@ -720,15 +721,15 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 app.get("/rooms", async (req, res) => {
   try {
     const rooms = await listRooms();
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       rooms,
       timestamp: Date.now()
     });
   } catch (e) {
     console.error("❌ /rooms error", e);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       rooms: [],
       error: 'Failed to fetch rooms'
     });
@@ -740,42 +741,42 @@ app.delete("/upload", async (req, res) => {
   try {
     const room = resolveRoomFromReq(req);
     const filename = (req.query.filename || "").toString().trim();
-    
+
     if (!filename) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Filename is required" 
+      return res.status(400).json({
+        success: false,
+        error: "Filename is required"
       });
     }
-    
+
     // Sanitize filename to prevent directory traversal
     const sanitizedFilename = path.basename(filename);
     const filePath = path.join(uploadDir, room, sanitizedFilename);
-    
+
     try {
       await fs.access(filePath);
       await fs.unlink(filePath);
-      
+
       if (roomData[room]) {
         roomData[room].files = (roomData[room].files || []).filter(
           (f) => f.filename !== sanitizedFilename
         );
         io.to(room).emit("file-deleted", { filename: sanitizedFilename });
       }
-      
+
       console.log(`🗑️ Deleted file: ${sanitizedFilename} from room: ${room}`);
       return res.json({ success: true });
     } catch (accessError) {
-      return res.status(404).json({ 
-        success: false, 
-        error: "File not found" 
+      return res.status(404).json({
+        success: false,
+        error: "File not found"
       });
     }
   } catch (e) {
     console.error("❌ Delete error:", e);
-    return res.status(500).json({ 
-      success: false, 
-      error: "Failed to delete file" 
+    return res.status(500).json({
+      success: false,
+      error: "Failed to delete file"
     });
   }
 });
@@ -834,7 +835,7 @@ setInterval(() => {
   const memUsage = process.memoryUsage();
   const activeRooms = Object.keys(roomData).length;
   const totalUsers = Object.values(roomData).reduce((sum, room) => sum + (room.users?.size || 0), 0);
-  
+
   console.log(`📊 Stats - Rooms: ${activeRooms}, Users: ${totalUsers}, Memory: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
 }, 5 * 60 * 1000); // Every 5 minutes
 
